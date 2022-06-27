@@ -217,7 +217,7 @@ mod tests {
             .set_payload(MY_CRATE_0_1_0)
             .to_request();
 
-        let _: serde_json::Value = test::read_response_json(&mut app, req).await;
+        let _: serde_json::Value = test::call_and_read_body_json(&mut app, req).await;
 
         let req = test::TestRequest::get()
             .uri("/crates/my-crate")
@@ -290,7 +290,7 @@ mod tests {
             .set_payload(MY_CRATE_0_1_0)
             .to_request();
 
-        let _: serde_json::Value = test::read_response_json(&mut app, req).await;
+        let _: serde_json::Value = test::call_and_read_body_json(&mut app, req).await;
 
         let req = test::TestRequest::get()
             .uri("/crates/my-crate/versions")

@@ -64,7 +64,7 @@ pub async fn get_info_refs(
             ])
             .output()
     })
-    .await?;
+    .await??;
 
     log::trace!("git says: {:?}", &output);
 
@@ -105,7 +105,7 @@ pub async fn upload_pack(
         cmd.stdin.as_mut().unwrap().write_all(&payload)?;
         cmd.wait_with_output()
     })
-    .await?;
+    .await??;
 
     if output.status.success() {
         Ok(HttpResponse::Ok()
@@ -121,18 +121,19 @@ pub async fn upload_pack(
 mod tests {
     use crate::handlers::git::pkt_line;
     use crate::test_helpers;
-    use actix_web::http::StatusCode;
+    use actix_web::http::header::QualityItem;
+    use actix_web::http::{StatusCode, header};
     use actix_web::{test, App};
 
     #[test]
-    fn test_pkt_line_from_example() {
+    async fn test_pkt_line_from_example() {
         let input = "d049f6c27a2244e12041955e262a404c7faba355 refs/heads/master\n";
         let expected = "003fd049f6c27a2244e12041955e262a404c7faba355 refs/heads/master\n";
         assert_eq!(expected, pkt_line(input));
     }
 
     #[test]
-    fn test_pkt_line_empty() {
+    async fn test_pkt_line_empty() {
         let input = "";
         let expected = "0004";
         assert_eq!(expected, pkt_line(input));
@@ -210,12 +211,16 @@ mod tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/git/index/git-upload-pack")
-            .header("content-type", "application/x-git-upload-pack-request")
-            .header("accept", "application/x-git-upload-pack-result")
+            .append_header(header::ContentType("application/x-git-upload-pack-request".parse().unwrap()))
+            .append_header(header::Accept(vec![
+                QualityItem::max("application/x-git-upload-pack-result".parse().unwrap())
+            ]))
             .to_request();
         let resp = test::call_service(&mut app, req).await;
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, resp.status());
     }
+
+    
 
     #[actix_rt::test]
     async fn test_upload_pack_initial_fetch() {
@@ -231,8 +236,10 @@ mod tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/git/index/git-upload-pack")
-            .header("content-type", "application/x-git-upload-pack-request")
-            .header("accept", "application/x-git-upload-pack-result")
+            .append_header(header::ContentType("application/x-git-upload-pack-request".parse().unwrap()))
+            .append_header(header::Accept(vec![
+                QualityItem::max("application/x-git-upload-pack-result".parse().unwrap())
+            ]))
             .set_payload("0000") // empty fetch, "don't care what you have"
             .to_request();
         let resp = test::call_service(&mut app, req).await;

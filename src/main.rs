@@ -68,7 +68,7 @@ async fn main() -> Result<(), EstuaryError> {
         App::new()
             .wrap(middleware::Logger::default())
             .app_data(package_index.clone())
-            .data(settings.clone())
+            .app_data(web::Data::new(settings.clone()))
             .configure(handlers::configure_routes)
     })
     .bind(bind_addr)?

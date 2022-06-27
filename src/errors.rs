@@ -1,11 +1,11 @@
 #![cfg(not(tarpaulin_include))]
 
-use actix_web::dev::HttpResponseBuilder;
+use actix_web::HttpResponseBuilder;
 use actix_web::error::{BlockingError, ResponseError};
 use actix_web::http::StatusCode;
-use actix_web::HttpResponse;
+use actix_web::{HttpResponse};
 use serde_json::json;
-use std::fmt::{Debug, Display};
+use std::fmt::{Debug};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -58,23 +58,17 @@ pub enum EstuaryError {
     IO(#[from] std::io::Error),
     #[error("Package Index failure: `{0}`")]
     PackageIndex(#[from] PackageIndexError),
-    #[error("Blocking task canceled")]
-    BlockingTaskCanceled,
     #[error("Not Found")]
     NotFound,
     #[error("Invalid Version: `{0}`")]
     InvalidVersion(#[from] semver::SemVerError),
 }
 
-impl<T> From<BlockingError<T>> for EstuaryError
+impl From<BlockingError> for EstuaryError
 where
-    T: Into<EstuaryError> + Display + Debug,
 {
-    fn from(e: BlockingError<T>) -> Self {
-        match e {
-            BlockingError::Canceled => EstuaryError::BlockingTaskCanceled,
-            BlockingError::Error(err) => err.into(),
-        }
+    fn from(e: BlockingError) -> Self {
+        e.into()
     }
 }
 

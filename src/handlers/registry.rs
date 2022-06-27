@@ -23,7 +23,7 @@ use crate::errors::ApiError;
 use crate::package_index::{Dependency, PackageIndex, PackageVersion};
 use crate::Settings;
 use actix_files as fs;
-use actix_web::{delete, get, put, web, HttpResponse, http::{StatusCode, header}};
+use actix_web::{delete, get, put, web, HttpResponse, HttpRequest, http::{StatusCode, header}};
 use byteorder::{LittleEndian, ReadBytesExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -76,7 +76,7 @@ impl SecureEq for &str {
     }
 }
 
-fn is_authorized(request: &web::HttpRequest, settings: &Settings) -> Result<(),StatusCode> {
+fn is_authorized(request: &HttpRequest, settings: &Settings) -> Result<(),StatusCode> {
     let publish_key = request.headers().get(header::AUTHORIZATION);
 
     if let Some(ref key) = settings.publish_key {
@@ -105,7 +105,7 @@ fn is_authorized(request: &web::HttpRequest, settings: &Settings) -> Result<(),S
 #[put("/new")]
 pub async fn publish(
     mut payload: web::Bytes,
-    request: web::HttpRequest,
+    request: HttpRequest,
     package_index: web::Data<Mutex<PackageIndex>>,
     settings: web::Data<Settings>,
 ) -> ApiResponse {
@@ -163,7 +163,7 @@ pub async fn publish(
 #[delete("/{crate_name}/{version}/yank")]
 pub async fn yank(
     path: web::Path<Crate>,
-    request: web::HttpRequest,
+    request: HttpRequest,
     package_index: web::Data<Mutex<PackageIndex>>,
     settings: web::Data<Settings>,
 ) -> ApiResponse {
@@ -180,7 +180,7 @@ pub async fn yank(
 #[put("/{crate_name}/{version}/unyank")]
 pub async fn unyank(
     path: web::Path<Crate>,
-    request: web::HttpRequest,
+    request: HttpRequest,
     package_index: web::Data<Mutex<PackageIndex>>,
     settings: web::Data<Settings>,
 ) -> ApiResponse {
@@ -316,7 +316,7 @@ mod tests {
             .set_payload(MY_CRATE_0_1_0)
             .to_request();
 
-        let resp: serde_json::Value = test::read_response_json(&mut app, req).await;
+        let resp: serde_json::Value = test::call_and_read_body_json(&mut app, req).await;
         assert!(!resp.as_object().unwrap().contains_key("errors"));
     }
 
@@ -340,7 +340,7 @@ mod tests {
             .set_payload(MY_CRATE_0_1_0)
             .to_request();
 
-        let resp: serde_json::Value = test::read_response_json(&mut app, req).await;
+        let resp: serde_json::Value = test::call_and_read_body_json(&mut app, req).await;
         // No errors the first time
         assert!(!resp.as_object().unwrap().contains_key("errors"));
 
@@ -350,7 +350,7 @@ mod tests {
             .set_payload(MY_CRATE_0_1_0)
             .to_request();
 
-        let resp: serde_json::Value = test::read_response_json(&mut app, req).await;
+        let resp: serde_json::Value = test::call_and_read_body_json(&mut app, req).await;
         // There should be errors in this case...
         assert!(resp.as_object().unwrap().contains_key("errors"));
     }
@@ -375,13 +375,13 @@ mod tests {
             .set_payload(MY_CRATE_0_1_0)
             .to_request();
 
-        let _: serde_json::Value = test::read_response_json(&mut app, req).await;
+        let _: serde_json::Value = test::call_and_read_body_json(&mut app, req).await;
 
         let req = test::TestRequest::delete()
             .uri("/api/v1/crates/my-crate/0.1.0/yank")
             .to_request();
 
-        let resp: serde_json::Value = test::read_response_json(&mut app, req).await;
+        let resp: serde_json::Value = test::call_and_read_body_json(&mut app, req).await;
         assert!(resp["ok"].as_bool().unwrap());
     }
 
@@ -405,19 +405,19 @@ mod tests {
             .set_payload(MY_CRATE_0_1_0)
             .to_request();
 
-        let _: serde_json::Value = test::read_response_json(&mut app, req).await;
+        let _: serde_json::Value = test::call_and_read_body_json(&mut app, req).await;
 
         let req = test::TestRequest::delete()
             .uri("/api/v1/crates/my-crate/0.1.0/yank")
             .to_request();
 
-        let _: serde_json::Value = test::read_response_json(&mut app, req).await;
+        let _: serde_json::Value = test::call_and_read_body_json(&mut app, req).await;
 
         let req = test::TestRequest::put()
             .uri("/api/v1/crates/my-crate/0.1.0/unyank")
             .to_request();
 
-        let resp: serde_json::Value = test::read_response_json(&mut app, req).await;
+        let resp: serde_json::Value = test::call_and_read_body_json(&mut app, req).await;
         assert!(resp["ok"].as_bool().unwrap());
     }
 
@@ -441,7 +441,7 @@ mod tests {
             .set_payload(MY_CRATE_0_1_0)
             .to_request();
 
-        let _: serde_json::Value = test::read_response_json(&mut app, req).await;
+        let _: serde_json::Value = test::call_and_read_body_json(&mut app, req).await;
 
         let req = test::TestRequest::get()
             .uri("/api/v1/crates/my-crate/0.1.0/download")

@@ -65,7 +65,6 @@ pub enum EstuaryError {
 }
 
 impl From<BlockingError> for EstuaryError
-where
 {
     fn from(e: BlockingError) -> Self {
         e.into()

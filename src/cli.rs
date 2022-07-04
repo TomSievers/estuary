@@ -60,6 +60,29 @@ pub struct Opt {
     )]
     pub git_bin: PathBuf,
 
+    #[structopt(
+        long,
+        env = "ESTUARY_DB_URI",
+        help = "URI to the database (example: postgresql://root:12345@localhost:5432/dbname)"
+    )]
+    pub db_uri: Option<String>,
+
+    #[structopt(
+        long,
+        env = "ESTUARY_DB_MAX_CONN",
+        default_value = "5",
+        help = "Maximum number of connections"
+    )]
+    pub db_max_connections : u32,
+
+    #[structopt(
+        long,
+        env = "ESTUARY_DB_TIMEOUT_S",
+        default_value = "10",
+        help = "Timeout for database connections in seconds"
+    )]
+    pub db_timeout_s : u32,
+
     #[structopt(long, env = "ESTUARY_PUBLISH_KEY")]
     pub publish_key: Option<String>
 }
@@ -101,6 +124,9 @@ mod tests {
             http_host: "".to_string(),
             http_port: 0,
             git_bin: Default::default(),
+            db_uri: None,
+            db_max_connections : 5,
+            db_timeout_s : 10,
             publish_key: Default::default()
         };
 
@@ -117,6 +143,9 @@ mod tests {
             http_host: "".to_string(),
             http_port: 0,
             git_bin: Default::default(),
+            db_uri: None,
+            db_max_connections : 5,
+            db_timeout_s : 10,
             publish_key: Default::default()
         };
 

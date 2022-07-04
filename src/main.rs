@@ -3,12 +3,14 @@ use actix_web::{middleware, web, App, HttpServer};
 use package_index::{Config, PackageIndex};
 use std::path::PathBuf;
 use std::sync::Mutex;
+use database::Database;
 
 mod cli;
 mod errors;
 mod handlers;
 mod package_index;
 mod storage;
+mod database;
 
 /// Common configuration details to share with handlers.
 #[derive(Clone, Debug)]
@@ -27,11 +29,15 @@ pub struct Settings {
 
     /// The key that must be presented in order to publish a crate.
     pub publish_key: Option<String>,
+
+    pub db : Option<Database>
 }
 
 #[cfg(not(tarpaulin_include))]
 #[actix_web::main]
 async fn main() -> Result<(), EstuaryError> {
+    
+
     #[cfg(feature = "dotenv")]
     dotenv::dotenv().ok();
 
@@ -44,11 +50,43 @@ async fn main() -> Result<(), EstuaryError> {
         dl: args.download_url(),
         api: args.base_url().to_string(),
     };
+
+    let db = if let Some(ref db_uri) = args.db_uri {
+
+        let mut db = Database::new(
+            db_uri.as_str(), 
+            args.db_max_connections, 
+            std::time::Duration::from_secs(args.db_timeout_s as u64)
+        ).await;
+
+        while db.is_err() {
+            log::error!("Unable to connect to database at {}", db_uri);
+            db = Database::new(
+                db_uri, 
+                args.db_max_connections, 
+                std::time::Duration::from_secs(args.db_timeout_s as u64)
+            ).await;
+        }
+        
+        db.ok()
+    } else {
+        None
+    };
+
+    if let Some(ref db) = db {
+        if let Ok(None) = db.get_user("admin").await {
+            if let Err(e) = db.create_user("admin", "admin", true).await {
+                log::warn!("Unable to create default admin user '{:?}'", e);
+            }
+        }
+    }
+
     let settings = Settings {
         crate_dir: args.crate_dir,
         index_dir: args.index_dir,
         git_binary: args.git_bin,
         publish_key: args.publish_key,
+        db : db
     };
 
     std::fs::create_dir_all(&settings.index_dir)?;
@@ -58,6 +96,7 @@ async fn main() -> Result<(), EstuaryError> {
     log::info!("\tIndex Dir: `{}`", settings.index_dir.display());
     log::info!("\tCrate Dir: `{}`", settings.crate_dir.display());
     log::info!("\tPackage Index Config: `{:?}`", config);
+    log::info!("\tDatabase URI: `{:?}`", args.db_uri);
 
     let package_index = web::Data::new(Mutex::new(PackageIndex::init(
         &settings.index_dir,

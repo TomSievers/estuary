@@ -27,8 +27,12 @@ serde = { version = "1.0", features = [ "derive" ] }
 serde_json = "1.0"
 sha2 = "0.10.1"
 structopt = "0.3.21"
+sqlx = { version = "0.6.0", features = ["runtime-actix-rustls", "postgres", "mysql", "mssql", "any", "chrono"]}
 thiserror = "1.0.23"
 glob = "0.3.0"
+argon2 = "0.4.1"
+base64 = "0.13.0"
+url = "2.2.2"
 
 [dev-dependencies]
 tempdir = "0.3.7"

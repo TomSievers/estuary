@@ -1,10 +1,11 @@
+use crate::Settings;
+use crate::database::DatabaseError;
 use crate::errors::{EstuaryError, PackageIndexError};
 use crate::package_index::{Dependency, DependencyKind, PackageIndex, PackageVersion};
-use actix_web::{get, web, HttpRequest, HttpResponse};
+use actix_web::{get, web, HttpRequest, HttpResponse, post};
 use askama::Template;
 use serde::Deserialize;
 use std::sync::Mutex;
-use log::info;
 
 type Result<T> = std::result::Result<T, EstuaryError>;
 
@@ -30,7 +31,6 @@ pub struct LandingTemplate<'a> {
 #[template(path = "login.html")]
 pub struct LoginTemplate<'a> {
     title: &'a str,
-    token: &'a str,
 }
 
 #[derive(Template)]
@@ -56,13 +56,49 @@ pub async fn landing(index: web::Data<Mutex<PackageIndex>>) -> Result<LandingTem
 }
 
 #[get("/me")]
-pub async fn login(req: HttpRequest) -> Result<LoginTemplate<'static>> {
-    info!("{:?}", req);
+pub async fn me_redirect(_req: HttpRequest) -> HttpResponse {
+    // Do something with session.
+    HttpResponse::TemporaryRedirect()
+        .append_header(("Location", "/login"))
+        .finish()
+}
 
+#[get("/login")]
+pub async fn login(_req: HttpRequest) -> Result<LoginTemplate<'static>> {
     Ok(LoginTemplate {
         title: "Login",
-        token: "0000", // TODO: implement proper auth
     })
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LoginData {
+    username : String,
+    password : String,
+}
+
+#[post("/login")]
+pub async fn login_req(data: web::Form<LoginData>, settings: web::Data<Settings>) -> std::result::Result<HttpResponse, DatabaseError> {
+
+    let _login_succes = if let Some(ref db) = settings.db {
+        if let Some(user) = db.get_user(&data.username).await? {
+            let res = db.verify_password(&user, &data.password).await;
+
+            if res.is_ok() {
+                Some(user)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    Ok(HttpResponse::Ok()
+        .body(LoginTemplate {
+            title: "Login",
+        }.to_string()))
 }
 
 #[derive(Template)]

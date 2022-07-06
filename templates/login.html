@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<dl>
-    <dt>Your token is:</dt>
-    <dd>
-        <pre>{{ token }}</pre>
-    </dd>
-</dl>
+<form class="flex column" method="POST" action="/login">
+    <label for="username">Username:</label><br>
+    <input class="input-field" type="text" id="username" name="username"><br>
+    <label for="password">Password:</label><br>
+    <input class="input-field" type="password" id="password" name="password"><br>
+    <input class="button" type="submit" value="Submit">
+</form>
 {% endblock %}

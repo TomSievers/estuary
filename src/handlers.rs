@@ -19,7 +19,9 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     )
     .service(frontend::styles)
     .service(frontend::login)
+    .service(frontend::me_redirect)
     .service(frontend::landing)
+    .service(frontend::login_req)
     .service(
         web::scope("/crates/{crate_name}")
             .route("/versions", web::get().to(frontend::version_list))

@@ -1,5 +1,6 @@
-use std::time::Duration;
+use std::{time::Duration, fmt::Display};
 
+use actix_web::ResponseError;
 use argon2::{password_hash::{SaltString, rand_core::{OsRng, RngCore}}, Argon2, PasswordHasher, PasswordVerifier, PasswordHash};
 use sqlx::{AnyPool, any::AnyPoolOptions};
 use url::Url;
@@ -39,22 +40,26 @@ impl Database {
         inner(uri.as_ref(), max_connections, timeout).await  
     }
 
-    pub async fn get_user<U>(&self, name : U) -> Result<Option<User>, sqlx::Error> 
+    pub async fn get_user<U>(&self, name : U) -> Result<Option<User>, DatabaseError> 
     where U : AsRef<str>
     {
-        async fn inner(db : &Database, name : &str) ->Result<Option<User>, sqlx::Error> {
-            sqlx::query_as("SELECT * FROM users WHERE name=$1")
+        async fn inner(db : &Database, name : &str) ->Result<Option<User>, DatabaseError> {
+            let res : Option<User> = sqlx::query_as("SELECT * FROM users WHERE name=$1")
                 .bind(name)
-                .fetch_optional(&db.pool).await
+                .fetch_optional(&db.pool).await?;
+
+            Ok(res)
         }
 
         inner(self, name.as_ref()).await
     }
 
-    pub async fn get_api_keys(&self, uid : i64) -> Result<Vec<ApiKey>, sqlx::Error> {
-        sqlx::query_as("SELECT * FROM api_keys WHERE uid=$1")
+    pub async fn get_api_keys(&self, uid : i64) -> Result<Vec<ApiKey>, DatabaseError> {
+        let res : Vec<ApiKey> = sqlx::query_as("SELECT * FROM api_keys WHERE uid=$1")
             .bind(uid)
-            .fetch_all(&self.pool).await
+            .fetch_all(&self.pool).await?;
+
+        Ok(res)
     }
 
     pub async fn create_user<U>(&self, name : U, password : U, write_permission : bool) -> Result<(), DatabaseError> 
@@ -85,10 +90,10 @@ impl Database {
         inner(self, name.as_ref(), password.as_ref(), write_permission).await
     }
 
-    pub async fn verify_password<U>(&self, user : User, password : U) -> Result<(), DatabaseError> 
+    pub async fn verify_password<U>(&self, user : &User, password : U) -> Result<(), DatabaseError> 
     where U : AsRef<str>
     {
-        fn inner(user : User, password : &str) -> Result<(), DatabaseError> {
+        fn inner(user : &User, password : &str) -> Result<(), DatabaseError> {
             let hash = PasswordHash::new(&user.password_hash)?;
             Argon2::default().verify_password(password.as_bytes(), &hash)?;
 
@@ -134,6 +139,26 @@ pub enum DatabaseError {
     InvalidUri
 }
 
+impl Display for DatabaseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DatabaseError::SqlError(e) => {
+                f.write_str(format!("SqlError: {:?}", e).as_str())
+            },
+            DatabaseError::PWHashError(e) => {
+                f.write_str(format!("HashError: {:?}", e).as_str())
+            },
+            DatabaseError::UniqueAlreadyExists => {
+                f.write_str("Unique value already exists")
+            },
+            DatabaseError::InvalidUri => {
+                f.write_str("Invalid URI")
+            },
+        }
+        
+    }
+}
+
 impl From<sqlx::Error> for DatabaseError {
     fn from(v: sqlx::Error) -> Self {
         DatabaseError::SqlError(v) 
@@ -144,6 +169,10 @@ impl From<argon2::password_hash::Error> for DatabaseError {
     fn from(v: argon2::password_hash::Error) -> Self {
         DatabaseError::PWHashError(v)
     }
+}
+
+impl ResponseError for DatabaseError {
+    
 }
 
 

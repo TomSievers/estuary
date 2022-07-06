@@ -5,5 +5,20 @@ site), run `npm install` and `npm run build` from the repo root.
 @tailwind base;
 @tailwind components;
 /* custom components */
+
+.input-field {
+    border: 1px solid grey;
+    width: 100%;
+}
+
+.button {
+    padding: 1% 0px;
+    margin: 4px 0px;
+}
+
+.column {
+    flex-direction: column;
+}
+
 /* end: custom components */
 @tailwind utilities;

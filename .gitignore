@@ -3,3 +3,5 @@
 _data
 node_modules/
 Cargo.lock
+/styles/main.dist.css
+/package-lock.json

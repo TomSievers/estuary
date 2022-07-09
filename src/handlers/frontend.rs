@@ -1,7 +1,8 @@
 use crate::Settings;
-use crate::database::DatabaseError;
+use crate::database::ApiKey;
 use crate::errors::{EstuaryError, PackageIndexError};
 use crate::package_index::{Dependency, DependencyKind, PackageIndex, PackageVersion};
+use actix_session::Session;
 use actix_web::{get, web, HttpRequest, HttpResponse, post};
 use askama::Template;
 use serde::Deserialize;
@@ -34,6 +35,15 @@ pub struct LoginTemplate<'a> {
 }
 
 #[derive(Template)]
+#[template(path = "user.html")]
+pub struct UserTemplate<'a> {
+    title: &'a str,
+    name: &'a str,
+    api_keys: Vec<ApiKey>,
+    new_key: Option<ApiKey>
+}
+
+#[derive(Template)]
 #[template(path = "crate_detail.html")]
 pub struct CrateDetailTemplate {
     title: String,
@@ -56,11 +66,45 @@ pub async fn landing(index: web::Data<Mutex<PackageIndex>>) -> Result<LandingTem
 }
 
 #[get("/me")]
-pub async fn me_redirect(_req: HttpRequest) -> HttpResponse {
-    // Do something with session.
-    HttpResponse::TemporaryRedirect()
+pub async fn me_redirect(session : Session) -> Result<HttpResponse> {
+
+    if let Some(_) = session.get::<i32>("uid")? {
+        return Ok(
+            HttpResponse::TemporaryRedirect()
+                .append_header(("Location", "/user"))
+                .finish()
+        )
+    }
+
+    Ok(HttpResponse::TemporaryRedirect()
         .append_header(("Location", "/login"))
-        .finish()
+        .finish())
+}
+
+#[get("/user")]
+pub async fn get_user(session : Session, settings : web::Data<Settings>) -> actix_web::Result<HttpResponse> {
+    if let Some(uid) = session.get::<i32>("uid")? {
+        if let Some(ref db) = settings.db {
+            if let Some(user) = db.get_user_by_id(uid).await? {
+                
+                let keys = db.get_api_keys(uid).await?;
+
+                return Ok(
+                    HttpResponse::Ok()
+                        .body(UserTemplate {
+                            title : &user.name,
+                            name: &user.name,
+                            api_keys: keys,
+                            new_key : None
+                        }.to_string())
+                );
+            }
+        }
+    }
+
+    Ok(HttpResponse::TemporaryRedirect()
+        .append_header(("Location", "/login"))
+        .finish())
 }
 
 #[get("/login")]
@@ -77,23 +121,21 @@ pub struct LoginData {
 }
 
 #[post("/login")]
-pub async fn login_req(data: web::Form<LoginData>, settings: web::Data<Settings>) -> std::result::Result<HttpResponse, DatabaseError> {
+pub async fn login_req(data: web::Form<LoginData>, settings: web::Data<Settings>, session : Session) -> actix_web::Result<HttpResponse> {
 
-    let _login_succes = if let Some(ref db) = settings.db {
+    if let Some(ref db) = settings.db {
         if let Some(user) = db.get_user(&data.username).await? {
-            let res = db.verify_password(&user, &data.password).await;
+            db.verify_password(&user, &data.password).await?;
 
-            if res.is_ok() {
-                Some(user)
-            } else {
-                None
-            }
-        } else {
-            None
+            session.insert("uid", user.id)?;
+
+            return Ok(
+                HttpResponse::SeeOther()
+                    .append_header(("Location", "/user"))
+                    .finish()
+            )
         }
-    } else {
-        None
-    };
+    }
 
     Ok(HttpResponse::Ok()
         .body(LoginTemplate {

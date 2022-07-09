@@ -1,9 +1,10 @@
 use crate::errors::EstuaryError;
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpServer, cookie::Key};
 use package_index::{Config, PackageIndex};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use database::Database;
+use actix_session::{storage::RedisActorSessionStore, SessionMiddleware};
 
 mod cli;
 mod errors;
@@ -11,6 +12,7 @@ mod handlers;
 mod package_index;
 mod storage;
 mod database;
+mod auth;
 
 /// Common configuration details to share with handlers.
 #[derive(Clone, Debug)]
@@ -36,7 +38,6 @@ pub struct Settings {
 #[cfg(not(tarpaulin_include))]
 #[actix_web::main]
 async fn main() -> Result<(), EstuaryError> {
-    
 
     #[cfg(feature = "dotenv")]
     dotenv::dotenv().ok();
@@ -97,15 +98,27 @@ async fn main() -> Result<(), EstuaryError> {
     log::info!("\tCrate Dir: `{}`", settings.crate_dir.display());
     log::info!("\tPackage Index Config: `{:?}`", config);
     log::info!("\tDatabase URI: `{:?}`", args.db_uri);
+    log::info!("\tRedis URI: `{:?}`", args.redis_uri);
 
     let package_index = web::Data::new(Mutex::new(PackageIndex::init(
         &settings.index_dir,
         &config,
     )?));
 
+    let secret_key = Key::generate();
+
+    let redis_uri = args.redis_uri.clone();
+
     Ok(HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
+            .wrap(SessionMiddleware::builder(
+                    RedisActorSessionStore::new("localhost:6379"),
+                    secret_key.clone()
+                )
+                .cookie_secure(false)
+                .build()
+            )
             .app_data(package_index.clone())
             .app_data(web::Data::new(settings.clone()))
             .configure(handlers::configure_routes)

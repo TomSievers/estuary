@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>{{ name }}</h1>
+
+<ul>
+    {% for key in api_keys %}
+    <li>{{key.id}}</li>
+    {% endfor %}
+</ul>
+
+{% if new_key.is_some() %}
+<p style="background-color: grey;"></p>
+{% else %}
+<form action="/user/api-key/generate" method="get">
+    <input type="submit" name="gen-api-key" value="Generate new Api key" />
+</form>
+{% endif %}
+
+{% endblock %}

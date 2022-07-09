@@ -83,6 +83,13 @@ pub struct Opt {
     )]
     pub db_timeout_s : u32,
 
+    #[structopt(
+        long,
+        env = "ESTUARY_REDIS_URI",
+        help = "Redis database used for session storage"
+    )]
+    pub redis_uri : String,
+
     #[structopt(long, env = "ESTUARY_PUBLISH_KEY")]
     pub publish_key: Option<String>
 }
@@ -127,6 +134,7 @@ mod tests {
             db_uri: None,
             db_max_connections : 5,
             db_timeout_s : 10,
+            redis_uri : String::from(""),
             publish_key: Default::default()
         };
 
@@ -146,6 +154,7 @@ mod tests {
             db_uri: None,
             db_max_connections : 5,
             db_timeout_s : 10,
+            redis_uri : String::from(""),
             publish_key: Default::default()
         };
 

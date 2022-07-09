@@ -11,3 +11,7 @@ services:
       - ./initdb:/docker-entrypoint-initdb.d
     ports:
       - 5432:5432
+  redis:
+    image: redis:7-alpine
+    ports: 
+      - 6379:6379

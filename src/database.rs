@@ -54,7 +54,16 @@ impl Database {
         inner(self, name.as_ref()).await
     }
 
-    pub async fn get_api_keys(&self, uid : i64) -> Result<Vec<ApiKey>, DatabaseError> {
+    pub async fn get_user_by_id(&self, id : i32) -> Result<Option<User>, DatabaseError> 
+    {
+        let res : Option<User> = sqlx::query_as("SELECT * FROM users WHERE id=$1")
+                .bind(id)
+                .fetch_optional(&self.pool).await?;
+
+        Ok(res)
+    }
+
+    pub async fn get_api_keys(&self, uid : i32) -> Result<Vec<ApiKey>, DatabaseError> {
         let res : Vec<ApiKey> = sqlx::query_as("SELECT * FROM api_keys WHERE uid=$1")
             .bind(uid)
             .fetch_all(&self.pool).await?;

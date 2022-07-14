@@ -1,8 +1,9 @@
+use crate::database::SqlDatabase;
 use crate::package_index::{Config, PackageIndex};
 use crate::Settings;
 use actix_web::web;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, Arc};
 use tempdir::TempDir;
 
 /// This is the request body sent to the publish endpoint from an empty bin crate.
@@ -28,7 +29,6 @@ pub fn get_test_settings(data_dir: &Path) -> web::Data<Settings> {
         crate_dir: data_dir.join("crates").to_path_buf(),
         index_dir: data_dir.join("index").to_path_buf(),
         git_binary: PathBuf::from("git"),
-        db: None,
         publish_key: None,
     };
     web::Data::new(settings)

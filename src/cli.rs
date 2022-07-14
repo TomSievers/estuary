@@ -65,7 +65,7 @@ pub struct Opt {
         env = "ESTUARY_DB_URI",
         help = "URI to the database (example: postgresql://root:12345@localhost:5432/dbname)"
     )]
-    pub db_uri: Option<String>,
+    pub db_uri: String,
 
     #[structopt(
         long,
@@ -131,7 +131,7 @@ mod tests {
             http_host: "".to_string(),
             http_port: 0,
             git_bin: Default::default(),
-            db_uri: None,
+            db_uri: "".to_string(),
             db_max_connections : 5,
             db_timeout_s : 10,
             redis_uri : String::from(""),
@@ -151,7 +151,7 @@ mod tests {
             http_host: "".to_string(),
             http_port: 0,
             git_bin: Default::default(),
-            db_uri: None,
+            db_uri: "".to_string(),
             db_max_connections : 5,
             db_timeout_s : 10,
             redis_uri : String::from(""),

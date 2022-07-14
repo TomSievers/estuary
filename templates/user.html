@@ -4,17 +4,56 @@
 <h1>{{ name }}</h1>
 
 <ul>
+    <li class="key_item"><div id="new_key" class="w-2/3"><input class="w-2/3" type="text" id="username" name="username"></div><button class="w-1/3" onclick="new_api_key()">New key</button></li>
     {% for key in api_keys %}
-    <li>{{key.id}}</li>
+    <li id="api-key-{{key.id}}" class="key_item"><div class="w-2/3">{{key.name}}</div><button class="w-1/3" onclick="revoke_api_key({{key.id}})">Revoke</button></li>
     {% endfor %}
 </ul>
 
-{% if new_key.is_some() %}
-<p style="background-color: grey;"></p>
-{% else %}
-<form action="/user/api-key/generate" method="get">
-    <input type="submit" name="gen-api-key" value="Generate new Api key" />
-</form>
-{% endif %}
+<script>
+    async function new_api_key() {
+        const elem = document.getElementById('new_key')
+
+        var key_data = {}
+
+        key_data.name = elem.firstChild.value;
+
+        var resp = await fetch('/user/api-key', {
+            method: 'POST',
+            credentials: 'same-origin',
+            redirect: 'error',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(key_data)
+        }).then(response => response.json())
+
+        console.log(resp.key)
+
+        const para = document.createElement('p')
+        const key = document.createTextNode(resp.key)
+        para.appendChild(key)
+        elem.replaceChildren(para)
+    }
+
+    async function revoke_api_key(id) {
+        var key_data = {}
+        key_data.id = id
+
+        var status = await fetch('/user/api-key', {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            redirect: 'error',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(key_data)
+        }).then(response => response.status)
+
+        if (status === 200) {
+            $('#api-key-' + id).remove()
+        } 
+    }
+</script>
 
 {% endblock %}

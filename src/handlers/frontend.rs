@@ -1,11 +1,13 @@
 use crate::Settings;
-use crate::database::ApiKey;
+use crate::auth::Authenticated;
+use crate::database::{ApiKey, User};
 use crate::errors::{EstuaryError, PackageIndexError};
 use crate::package_index::{Dependency, DependencyKind, PackageIndex, PackageVersion};
 use actix_session::Session;
-use actix_web::{get, web, HttpRequest, HttpResponse, post};
+use actix_web::{get, web, HttpRequest, HttpResponse, post, delete};
 use askama::Template;
 use serde::Deserialize;
+use serde_json::json;
 use std::sync::Mutex;
 
 type Result<T> = std::result::Result<T, EstuaryError>;
@@ -25,6 +27,7 @@ pub async fn styles(_req: HttpRequest) -> HttpResponse {
 #[template(path = "landing.html")]
 pub struct LandingTemplate<'a> {
     title: &'a str,
+    user: Option<User>,
     packages: Vec<String>,
 }
 
@@ -32,21 +35,23 @@ pub struct LandingTemplate<'a> {
 #[template(path = "login.html")]
 pub struct LoginTemplate<'a> {
     title: &'a str,
+    user: Option<User>,
 }
 
 #[derive(Template)]
 #[template(path = "user.html")]
 pub struct UserTemplate<'a> {
     title: &'a str,
+    user: Option<User>,
     name: &'a str,
-    api_keys: Vec<ApiKey>,
-    new_key: Option<ApiKey>
+    api_keys: Vec<ApiKey>
 }
 
 #[derive(Template)]
 #[template(path = "crate_detail.html")]
 pub struct CrateDetailTemplate {
     title: String,
+    user: Option<User>,
     pkg: PackageVersion,
     dev_deps: Vec<Dependency>,
     non_dev_deps: Vec<Dependency>,
@@ -61,56 +66,73 @@ pub async fn landing(index: web::Data<Mutex<PackageIndex>>) -> Result<LandingTem
 
     Ok(LandingTemplate {
         title: "Crate List",
+        user : None,
         packages: names,
     })
 }
 
 #[get("/me")]
-pub async fn me_redirect(session : Session) -> Result<HttpResponse> {
-
-    if let Some(_) = session.get::<i32>("uid")? {
-        return Ok(
-            HttpResponse::TemporaryRedirect()
-                .append_header(("Location", "/user"))
-                .finish()
-        )
-    }
-
-    Ok(HttpResponse::TemporaryRedirect()
-        .append_header(("Location", "/login"))
-        .finish())
+pub async fn me_redirect(_auth : Authenticated) -> Result<HttpResponse> {
+    Ok(
+        HttpResponse::TemporaryRedirect()
+            .append_header(("Location", "/user"))
+            .finish()
+    )
 }
 
 #[get("/user")]
-pub async fn get_user(session : Session, settings : web::Data<Settings>) -> actix_web::Result<HttpResponse> {
-    if let Some(uid) = session.get::<i32>("uid")? {
-        if let Some(ref db) = settings.db {
-            if let Some(user) = db.get_user_by_id(uid).await? {
-                
-                let keys = db.get_api_keys(uid).await?;
+pub async fn get_user(auth : Authenticated, settings : web::Data<Settings>) -> actix_web::Result<HttpResponse> {
+    let keys = settings.db.get_api_keys(auth.id).await?;
 
-                return Ok(
-                    HttpResponse::Ok()
-                        .body(UserTemplate {
-                            title : &user.name,
-                            name: &user.name,
-                            api_keys: keys,
-                            new_key : None
-                        }.to_string())
-                );
-            }
-        }
-    }
+    Ok(
+        HttpResponse::Ok()
+            .body(UserTemplate {
+                title : &auth.name,
+                user : None,
+                name: &auth.name,
+                api_keys: keys,
+            }.to_string())
+    )
+}
 
-    Ok(HttpResponse::TemporaryRedirect()
-        .append_header(("Location", "/login"))
-        .finish())
+#[derive(Deserialize)]
+pub struct NewKey {
+    name: String,
+}
+
+#[post("/user/api-key")]
+pub async fn gen_api_key(auth : Authenticated, new_key : web::Json<NewKey>, settings : web::Data<Settings>) -> actix_web::Result<HttpResponse> {
+
+    let res = settings.db.generate_api_key(new_key.name.clone(), &auth).await?;
+
+    Ok(
+        HttpResponse::Ok()
+        .json(json!({
+            "key": res
+        }))
+    )
+}
+
+#[derive(Deserialize)]
+pub struct OldKey {
+    id: i32,
+}
+
+#[delete("/user/api-key")]
+pub async fn revoke_api_key(auth : Authenticated, new_key : web::Json<OldKey>, settings : web::Data<Settings>) -> actix_web::Result<HttpResponse> {
+    settings.db.revoke_api_key(new_key.id, auth.id).await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .finish()
+    )
 }
 
 #[get("/login")]
 pub async fn login(_req: HttpRequest) -> Result<LoginTemplate<'static>> {
     Ok(LoginTemplate {
         title: "Login",
+        user : None
     })
 }
 
@@ -123,29 +145,29 @@ pub struct LoginData {
 #[post("/login")]
 pub async fn login_req(data: web::Form<LoginData>, settings: web::Data<Settings>, session : Session) -> actix_web::Result<HttpResponse> {
 
-    if let Some(ref db) = settings.db {
-        if let Some(user) = db.get_user(&data.username).await? {
-            db.verify_password(&user, &data.password).await?;
+    if let Some(user) = settings.db.get_user(data.username.clone()).await? {
+        settings.db.verify_password(&user, data.password.clone()).await?;
 
-            session.insert("uid", user.id)?;
+        session.insert("uid", user.id)?;
 
-            return Ok(
-                HttpResponse::SeeOther()
-                    .append_header(("Location", "/user"))
-                    .finish()
-            )
-        }
+        return Ok(
+            HttpResponse::SeeOther()
+                .append_header(("Location", "/user"))
+                .finish()
+        )
     }
 
     Ok(HttpResponse::Ok()
         .body(LoginTemplate {
             title: "Login",
+            user : None
         }.to_string()))
 }
 
 #[derive(Template)]
 #[template(path = "crate_version_list.html")]
 pub struct CrateVersionListTemplate {
+    user : Option<User>,
     crate_name: String,
     releases: Vec<PackageVersion>,
 }
@@ -173,6 +195,7 @@ pub async fn version_list(
 
     Ok(CrateVersionListTemplate {
         crate_name: path.crate_name.clone(),
+        user : None,
         releases,
     })
 }
@@ -221,6 +244,7 @@ pub async fn crate_detail(
                 .partition(|dep| dep.kind == DependencyKind::Dev);
 
             Ok(CrateDetailTemplate {
+                user : None,
                 title: format!("{} v{}", pkg.name, pkg.vers),
                 pkg,
                 dev_deps,

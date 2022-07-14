@@ -16,6 +16,14 @@ site), run `npm install` and `npm run build` from the repo root.
     margin: 4px 0px;
 }
 
+.key_item {
+    background-color: lightgrey;
+    border-radius: 25px;
+    padding: 15px 0px;
+    display: flex;
+    flex-direction: row;
+}
+
 .column {
     flex-direction: column;
 }

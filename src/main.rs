@@ -3,7 +3,9 @@ use actix_web::{middleware, web, App, HttpServer, cookie::Key};
 use package_index::{Config, PackageIndex};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use database::Database;
+use std::sync::Arc;
+use std::time::Duration;
+use database::{SqlDatabase, Database};
 use actix_session::{storage::RedisActorSessionStore, SessionMiddleware};
 
 mod cli;
@@ -32,7 +34,7 @@ pub struct Settings {
     /// The key that must be presented in order to publish a crate.
     pub publish_key: Option<String>,
 
-    pub db : Option<Database>
+    pub db : Arc<dyn Database>
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -52,42 +54,21 @@ async fn main() -> Result<(), EstuaryError> {
         api: args.base_url().to_string(),
     };
 
-    let db = if let Some(ref db_uri) = args.db_uri {
-
-        let mut db = Database::new(
-            db_uri.as_str(), 
-            args.db_max_connections, 
-            std::time::Duration::from_secs(args.db_timeout_s as u64)
-        ).await;
-
-        while db.is_err() {
-            log::error!("Unable to connect to database at {}", db_uri);
-            db = Database::new(
-                db_uri, 
-                args.db_max_connections, 
-                std::time::Duration::from_secs(args.db_timeout_s as u64)
-            ).await;
-        }
+    let db = Arc::new(SqlDatabase::new(
+        args.db_uri.clone(),
+        args.db_max_connections,
+        Duration::from_secs(args.db_timeout_s.into())
+    ).await);
         
-        db.ok()
-    } else {
-        None
-    };
 
-    if let Some(ref db) = db {
-        if let Ok(None) = db.get_user("admin").await {
-            if let Err(e) = db.create_user("admin", "admin", true).await {
-                log::warn!("Unable to create default admin user '{:?}'", e);
-            }
-        }
-    }
+    log::warn!("{:?}", db.migrate().await);
 
     let settings = Settings {
         crate_dir: args.crate_dir,
         index_dir: args.index_dir,
         git_binary: args.git_bin,
         publish_key: args.publish_key,
-        db : db
+        db : db.clone()
     };
 
     std::fs::create_dir_all(&settings.index_dir)?;
@@ -107,11 +88,12 @@ async fn main() -> Result<(), EstuaryError> {
 
     let secret_key = Key::generate();
 
-    let redis_uri = args.redis_uri.clone();
+    //let redis_uri = args.redis_uri.clone();
 
     Ok(HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
+            .wrap(auth::AuthFactory::new(db.clone()))
             .wrap(SessionMiddleware::builder(
                     RedisActorSessionStore::new("localhost:6379"),
                     secret_key.clone()
